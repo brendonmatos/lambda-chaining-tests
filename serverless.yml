@@ -1,0 +1,89 @@
+service:
+  name: lambda-chaining-tests
+
+plugins:
+  - serverless-plugin-stage-variables
+  # - serverless-dynamodb-local
+  - serverless-step-functions
+  - serverless-offline-step-functions
+  - serverless-offline
+
+package:
+  individually: true
+  excludeDevDependencies: true
+
+provider:
+  name: aws
+  runtime: nodejs8.10
+  profile: onli
+  region: sa-east-1
+  stage: ${opt:stage, 'local'}
+  
+stepFunctions:
+  stateMachines:
+    getMessageInLanguage:
+      events:
+        - http:
+            path: /hello-world
+            method: get
+      
+      definition:
+        Comment: First Step Functions!
+        StartAt: GetMessage
+
+        States:
+          GetMessage:
+            Type: Task
+            Resource: 'arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:getMessage'
+            ResultPath: '$'
+            InputPath: '$'
+            Next: SetTranslationSettingsAdapter
+
+          SetTranslationSettingsAdapter: 
+            Type: Task
+            Resource: 'arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:translateMessageAdapter'
+            InputPath: '$'
+            ResultPath: '$'
+            Next: TranslateMessage
+
+          TranslateMessage:
+            Type: Task
+            Resource: 'arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:translate'
+            InputPath: '$.translateInput'
+            End: true
+            
+          # ChoiceState:
+          #   Type: Choice
+          #   OutputPath: '$'
+          #   Choices:
+          #     - Variable: $.hello.name
+          #       StringEquals: 'Hadrian'
+          #       Next: WaitState
+          #     - Variable: $.hello.success
+          #       BooleanEquals: true
+          #       Next: SucceedState
+          #   Default: 'Ins'
+          # InsurerNotFound: 
+          #   Type: Task
+
+functions:
+
+  getMessage:
+    handler: functions/getMessage.handler
+
+  translateMessageAdapter:
+    handler: functions/translateMessageAdapter.handler
+  
+  translate:
+    handler: functions/translate.handler
+
+custom:
+  dynamodb:
+    stages:
+      - local
+    start:
+      port: 8000
+      inMemory: true
+      migrate: true
+
+  webpackIncludeModules: true
